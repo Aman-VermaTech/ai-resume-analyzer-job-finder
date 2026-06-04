@@ -182,10 +182,12 @@ function getPdfLib() {
 }
 
 function loadScript(src) {
+  console.log("[Loader] loading script", src);
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`);
     if (existing) {
       if (getPdfLib()) {
+        console.log("[Loader] script already loaded", src);
         resolve();
         return;
       }
@@ -203,6 +205,7 @@ function loadScript(src) {
     script.referrerPolicy = "no-referrer";
     script.onload = () => {
       window.clearTimeout(timeout);
+      console.log("[Loader] loaded script", src);
       resolve();
     };
     script.onerror = () => {
@@ -215,6 +218,7 @@ function loadScript(src) {
 
 async function ensurePdfLib() {
   let lib = getPdfLib();
+  console.log("[PDF] ensurePdfLib check", { loaded: !!lib });
   if (!lib) {
     const sources = [
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js",
@@ -225,6 +229,7 @@ async function ensurePdfLib() {
       try {
         await loadScript(source);
         lib = getPdfLib();
+        console.log("[PDF] loaded library from source", source, { loaded: !!lib });
         if (lib) break;
       } catch (error) {
         console.warn(`Could not load PDF.js from ${source}`, error);
@@ -236,7 +241,9 @@ async function ensurePdfLib() {
     throw new Error("PDF library not loaded. Check your internet connection and try again.");
   }
 
-  lib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+  if (lib.GlobalWorkerOptions) {
+    lib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+  }
   return lib;
 }
 const interviewButton = document.querySelector("#interviewButton");
@@ -664,7 +671,12 @@ async function analyzeResume() {
 
   analyzeButton.disabled = true;
   analyzeButton.textContent = "Analyzing...";
-  setStatus("Trying AI analysis...");
+  setStatus("Sending for analysis...");
+  console.log("[Analysis] Request started", {
+    resumeLength: resume.length,
+    role: roleSelect.value,
+    jobDescriptionLength: jobText.value.trim().length
+  });
 
   try {
     if (location.protocol === "file:") {
@@ -682,6 +694,7 @@ async function analyzeResume() {
     });
 
     const data = await response.json();
+    console.log("[Analysis] API response received", { status: response.status, data });
     if (!response.ok) {
       throw new Error(data.error || "AI request failed.");
     }
@@ -691,6 +704,8 @@ async function analyzeResume() {
       targetSkills: data.analysis.targetSkills || getTargetSkills(roleSelect.value, jobText.value.trim()),
       recommendedJobs: data.analysis.recommendedJobs || activeJobs
     }, data.source);
+    setStatus("Analysis complete", "gemini");
+    console.log("[Analysis] Analysis rendered");
   } catch (error) {
     setStatus(`AI analysis failed: ${error.message}`, "warn");
     console.error("AI analysis failed:", error);
@@ -853,47 +868,59 @@ async function canvasToBlob(canvas) {
 }
 
 async function extractPdfText(file) {
+  console.log("[PDF] extractPdfText started", file.name);
   const pdfLib = await ensurePdfLib();
+  console.log("[PDF] pdf.js library loaded", !!pdfLib);
 
   try {
-    const data = new Uint8Array(await file.arrayBuffer());
+    const arrayBuffer = await file.arrayBuffer();
+    console.log("[PDF] FileReader completed for PDF arrayBuffer", { bytes: arrayBuffer.byteLength });
+    const data = new Uint8Array(arrayBuffer);
     const loadingTask = pdfLib.getDocument({
       data,
       disableFontFace: true,
       useSystemFonts: true
     });
     const pdf = await loadingTask.promise;
+    console.log("[PDF] PDF document loaded", { pages: pdf.numPages });
     const pages = [];
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
-      setUploadStatus(`Reading PDF page ${pageNum} of ${pdf.numPages}...`, "info");
+      setUploadStatus(`Reading PDF page ${pageNum} of ${pdf.numPages}...`);
+      console.log(`[PDF] Extracting page ${pageNum}/${pdf.numPages}`);
       const page = await pdf.getPage(pageNum);
       const content = await page.getTextContent();
       const pageText = content.items.map((item) => item.str).join(" ");
       pages.push(pageText);
     }
 
-    return pages.join("\n\n");
+    const result = pages.join("\n\n");
+    console.log("[PDF] Extraction complete", { length: result.length });
+    return result;
   } catch (error) {
-    console.error("PDF text extraction failed:", error);
+    console.error("[PDF] PDF text extraction failed:", error);
     throw new Error("Could not extract text from PDF.");
   }
 }
 
 async function extractPdfImageText(file) {
+  console.log("[PDF OCR] extractPdfImageText started", file.name);
   const pdfLib = await ensurePdfLib();
   if (typeof Tesseract === "undefined") {
     throw new Error("OCR library not loaded.");
   }
 
   try {
-    const data = new Uint8Array(await file.arrayBuffer());
+    const arrayBuffer = await file.arrayBuffer();
+    console.log("[PDF OCR] FileReader completed for PDF arrayBuffer", { bytes: arrayBuffer.byteLength });
+    const data = new Uint8Array(arrayBuffer);
     const loadingTask = pdfLib.getDocument({
       data,
       disableFontFace: true,
       useSystemFonts: true
     });
     const pdf = await loadingTask.promise;
+    console.log("[PDF OCR] PDF document loaded", { pages: pdf.numPages });
     let extracted = "";
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
@@ -909,18 +936,20 @@ async function extractPdfImageText(file) {
       };
       await page.render(renderContext).promise;
       const blob = await canvasToBlob(canvas);
-      setUploadStatus(`OCR scanning PDF page ${pageNum} of ${pdf.numPages}...`, "info");
+      setUploadStatus(`OCR scanning PDF page ${pageNum} of ${pdf.numPages}...`);
+      console.log(` [PDF OCR] Rendering and OCR page ${pageNum}`);
       const result = await Tesseract.recognize(blob, "eng", {
-        logger: () => {
-          setUploadStatus(`OCR scanning PDF page ${pageNum} of ${pdf.numPages}...`, "info");
+        logger: (progress) => {
+          setUploadStatus(`OCR scanning PDF page ${pageNum} of ${pdf.numPages}... (${Math.round(progress.progress * 100)}%)`);
         }
       });
       extracted += `${result.data.text}\n\n`;
     }
 
+    console.log("[PDF OCR] OCR extraction complete", { length: extracted.length });
     return extracted;
   } catch (error) {
-    console.error("PDF OCR failed:", error);
+    console.error("[PDF OCR] PDF OCR failed:", error);
     throw new Error("Could not run OCR on PDF.");
   }
 }
@@ -930,43 +959,64 @@ async function extractImageText(file) {
     if (typeof Tesseract === "undefined") {
       throw new Error("OCR library not loaded.");
     }
-    setUploadStatus("Running OCR on image...", "info");
+    console.log("[Image OCR] extractImageText started", file.name);
+    setUploadStatus("Running OCR on image... Please wait.");
     const result = await Tesseract.recognize(file, "eng", {
-      logger: () => {
-        setUploadStatus("Running OCR on image...", "info");
+      logger: (progress) => {
+        setUploadStatus(`Running OCR on image... (${Math.round(progress.progress * 100)}%)`);
       }
     });
+    console.log("[Image OCR] extracted text length", result.data.text.length);
     return result.data.text;
   } catch (error) {
+    console.error("[Image OCR] Could not extract text from image.", error);
     throw new Error("Could not extract text from image.");
   }
 }
 
 async function extractAndPopulateResume(file) {
   const extension = file.name.split(".").pop()?.toLowerCase() || "";
-  setUploadStatus(`Processing ${file.name}...`, "info");
+  console.log("[Resume Upload] File selected", {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    extension
+  });
+  setUploadStatus(`File selected: ${file.name}`);
   setLoading(true);
 
   try {
     let text = "";
 
     if (["txt", "md"].includes(extension)) {
+      console.log("[Resume Upload] Reading plain text file");
+      setUploadStatus("Reading resume text file...");
       text = await file.text();
+      console.log("[Resume Upload] FileReader completed", { length: text.length });
     } else if (extension === "pdf") {
+      setUploadStatus("Reading PDF... Please wait.");
+      console.log("[Resume Upload] PDF selected, starting extraction");
       try {
         text = await extractPdfText(file);
       } catch (error) {
-        setUploadStatus("PDF extraction failed, trying OCR fallback...", "info");
+        console.warn("[Resume Upload] PDF text extraction failed, falling back to OCR", error);
+        setUploadStatus("PDF extraction failed, trying OCR fallback...");
         text = "";
       }
       if (!text.trim() || text.trim().length < 40) {
-        setUploadStatus("Attempting OCR fallback for PDF...", "info");
+        setUploadStatus("Extracting text from PDF using OCR...");
+        console.log("[Resume Upload] OCR fallback starting for PDF");
         text = await extractPdfImageText(file);
       }
     } else if (["png", "jpg", "jpeg", "gif", "bmp", "webp"].includes(extension)) {
+      setUploadStatus("Extracting text from image... Please wait.");
+      console.log("[Resume Upload] Image file selected, starting OCR");
       text = await extractImageText(file);
     } else {
+      setUploadStatus("Reading unsupported file type as text...");
+      console.log("[Resume Upload] Unsupported file type, attempting generic text read", extension);
       text = await file.text();
+      console.log("[Resume Upload] Generic FileReader completed", { length: text.length });
       if (!text.trim()) {
         throw new Error("This file format is not directly supported for text extraction yet.");
       }
@@ -979,12 +1029,14 @@ async function extractAndPopulateResume(file) {
     renderHeroSkills();
 
     if (trimmed.length) {
-      setUploadStatus(`Extracted ${trimmed.length} characters from ${file.name}.`, "success");
+      console.log("[Resume Upload] Extracted text length", trimmed.length);
+      setUploadStatus(`Extracted ${trimmed.length} characters from ${file.name}.`,'success');
       return trimmed;
     }
 
     throw new Error("Extraction completed but no text was found.");
   } catch (error) {
+    console.error("[Resume Upload] Extraction failed", error);
     setUploadStatus(error.message, "error");
     alert(`${error.message} Please paste your resume text manually if extraction fails.`);
   } finally {
@@ -995,11 +1047,13 @@ async function extractAndPopulateResume(file) {
 async function handleFileUpload(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+  console.log("[Resume Upload] file input change event fired");
   await extractAndPopulateResume(file);
   event.target.value = "";
 }
 
 async function handleDroppedFile(file) {
+  console.log("[Resume Upload] file dropped", file.name, file.type, file.size);
   await extractAndPopulateResume(file);
 }
 
