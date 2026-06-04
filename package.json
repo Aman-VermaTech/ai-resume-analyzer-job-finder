@@ -1,0 +1,11 @@
+{
+  "name": "resume-ai-job-finder",
+  "version": "1.0.0",
+  "description": "AI Resume Analyzer & Job Finder with advanced skill gap analysis, ATS breakdown, and career roadmap features.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "MIT"
+}

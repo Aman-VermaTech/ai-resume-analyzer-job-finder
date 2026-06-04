@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resume AI Analyzer & Job Finder</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="hero-copy">
+        <p class="eyebrow">AI Career Assistant</p>
+        <h1>Resume Analyzer & Job Finder</h1>
+        <p class="hero-subtitle">Dynamic career intelligence for your target role: <strong id="currentRoleLabel">Frontend Developer</strong></p>
+        <div class="hero-actions">
+          <button id="demoBtn" class="secondary-button" title="Load demo resume">Demo Resume</button>
+          <button id="themeToggle" class="secondary-button" title="Toggle dark mode">Dark mode</button>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-preview-card glass-card">
+          <div class="hero-preview-head">
+            <p class="eyebrow">Instant matching</p>
+            <span id="heroMatchLabel">Realtime resume score</span>
+          </div>
+          <div class="hero-score">
+            <div class="score-ring" id="heroMatchRing" style="--score-fill: 0%">
+              <span id="heroScore">0</span>
+              <small>%</small>
+            </div>
+            <div class="hero-score-copy">
+              <strong id="heroScoreTitle">Upload your resume to begin</strong>
+              <p>See ATS readiness, match potential, and skills coverage in a modern startup-grade dashboard.</p>
+            </div>
+          </div>
+          <div class="hero-skill-list" id="heroSkillChips"></div>
+        </div>
+      </div>
+    </header>
+
+    <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
+
+    <nav class="page-tabs" role="tablist" aria-label="App pages">
+      <button type="button" class="page-tab active" data-page="home">Home</button>
+      <button type="button" class="page-tab" data-page="jobs">Recommended Jobs</button>
+      <button type="button" class="page-tab" data-page="applied">Applied Jobs</button>
+      <button type="button" class="page-tab" data-page="skills">Recommended Skills</button>
+      <button type="button" class="page-tab" data-page="roadmap">Career Roadmap</button>
+    </nav>
+
+    <section class="page-wrapper">
+      <section id="page-home" class="page-panel active">
+        <div class="home-top">
+          <div class="hero-grid">
+            <article class="hero-card">
+              <p class="eyebrow">Resume Score</p>
+              <strong id="scoreCard">0 / 100</strong>
+              <span>Instant feedback on ATS readiness and keyword fit.</span>
+            </article>
+            <article class="hero-card">
+              <p class="eyebrow">Job Matches</p>
+              <strong id="jobMatchCard">0</strong>
+              <span>Jobs matched using your resume strengths.</span>
+            </article>
+            <article class="hero-card">
+              <p class="eyebrow">Missing Skills</p>
+              <strong id="missingCard">0</strong>
+              <span>Spot gaps and prioritize learning next skills.</span>
+            </article>
+            <article class="hero-card">
+              <p class="eyebrow">Opportunity Score</p>
+              <strong id="opportunityCard">0%</strong>
+              <span>How ready your profile is for the next role.</span>
+            </article>
+          </div>
+
+          <div class="pulse-panel" id="livePulse">
+            <div class="pulse-card">
+              <p class="eyebrow">Live Pulse</p>
+              <strong>Ready to analyze</strong>
+              <span>Run a resume check to unlock role-specific insights, match strength, and career momentum.</span>
+            </div>
+            <div class="pulse-card stats-card">
+              <div>
+                <p class="eyebrow">Top Job Match</p>
+                <strong id="pulseTopMatch">0%</strong>
+              </div>
+              <div>
+                <p class="eyebrow">Skill Gap</p>
+                <strong id="pulseGap">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="upload-shell">
+            <div id="resumeUploadShell" class="upload-widget glass-card">
+              <div id="resumeDropZone" class="dropzone" tabindex="0">
+                <div class="dropzone-copy">
+                  <span class="drop-icon">📁</span>
+                  <h3>Drag & drop your resume</h3>
+                  <p>PDF, TXT, JPG, PNG and popular resume formats are supported.</p>
+                </div>
+                <button type="button" id="browseBtn" class="ghost-button">Browse files</button>
+                <input id="resumeUpload" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.gif,.bmp,.webp" hidden />
+              </div>
+              <aside class="resume-preview-card glass-card" id="resumePreview">
+                <div class="preview-head">
+                  <p class="eyebrow">Resume preview</p>
+                  <strong id="previewFileName">No file uploaded</strong>
+                </div>
+                <p id="resumePreviewText" class="preview-copy">Drop a resume or paste your resume text to generate instant insights.</p>
+                <div class="preview-tags" id="previewTags"></div>
+              </aside>
+            </div>
+          </div>
+
+          <form class="input-panel" id="resumeForm">
+            <label for="resumeText">Resume Text</label>
+            <textarea id="resumeText" placeholder="Paste your resume text here..."></textarea>
+
+            <label for="jobText">Target Job Description</label>
+            <textarea id="jobText" placeholder="Paste a job description to compare against..."></textarea>
+
+            <div class="controls">
+              <select id="roleSelect" aria-label="Target role">
+                <option value="frontend">Frontend Developer</option>
+                <option value="backend">Backend Developer</option>
+                <option value="data">Data Analyst</option>
+                <option value="ml">Machine Learning Intern</option>
+              </select>
+              <button id="analyzeButton" type="submit">Analyze Resume</button>
+            </div>
+            <div class="action-toolbar">
+              <button id="fixButton" type="button">Fix Resume</button>
+              <button id="interviewButton" type="button">Interview Prep</button>
+              <button id="roadmapButton" type="button">Career Roadmap</button>
+            </div>
+            <p id="aiStatus" class="ai-status">AI mode is active. Start the Node server and the AI backend will analyze resumes using Gemini.</p>
+          </form>
+        </div>
+
+        <section class="results-panel">
+          <div class="score-wrap">
+            <div class="score-ring">
+              <span id="score">0</span>
+              <small>ATS Score</small>
+            </div>
+            <div>
+              <h2 id="verdict">Ready when you are</h2>
+              <p id="summary">Paste a resume and target role to get skill matches, missing keywords, and improvement tips.</p>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <article>
+              <span id="matchedCount">0</span>
+              <p>Matched skills</p>
+            </article>
+            <article>
+              <span id="missingCount">0</span>
+              <p>Missing skills</p>
+            </article>
+            <article>
+              <span id="actionCount">0</span>
+              <p>Action verbs</p>
+            </article>
+          </div>
+
+          <div class="extra-panels">
+            <section class="panel-card">
+              <h3>AI Resume Fixer</h3>
+              <ul id="fixesList" class="suggestions"></ul>
+            </section>
+            <section class="panel-card">
+              <h3>Interview Prep</h3>
+              <ul id="questionList" class="suggestions"></ul>
+            </section>
+            <section class="panel-card">
+              <h3>Resume Suggestions</h3>
+              <ul id="suggestions" class="suggestions"></ul>
+            </section>
+          </div>
+        </section>
+      </section>
+
+      <section id="page-jobs" class="page-panel">
+        <div class="page-head">
+          <h2>Recommended Jobs</h2>
+          <input id="jobSearch" type="search" placeholder="Search jobs" />
+        </div>
+        <div class="job-stats">
+          <article class="mini-card">
+            <span>Top Match</span>
+            <strong id="topMatchCard">0%</strong>
+          </article>
+          <article class="mini-card">
+            <span>Loaded Jobs</span>
+            <strong id="jobCountCard">0</strong>
+          </article>
+        </div>
+        <div id="jobs" class="job-list"></div>
+      </section>
+
+      <section id="page-applied" class="page-panel">
+        <div class="page-head">
+          <h2>Applied Jobs</h2>
+          <p class="muted">Track the jobs you have applied to and review your application status.</p>
+        </div>
+        <div id="appliedJobs" class="job-list"></div>
+      </section>
+
+      <section id="page-skills" class="page-panel">
+        <div class="page-head">
+          <h2>Recommended Skills</h2>
+          <p class="muted">See skill gaps, keyword coverage, and ATS strengths for your current resume.</p>
+        </div>
+        <div id="atsBreakdown" class="ats-grid">
+          <div class="ats-card">
+            <h3>ATS Breakdown</h3>
+            <div id="atsProgress" class="progress-list"></div>
+          </div>
+          <div class="gap-card">
+            <h3>Skill Gap Analysis</h3>
+            <p class="gap-summary">Match Score: <strong id="gapScore">0%</strong></p>
+            <div id="gapMissing" class="chips"></div>
+            <div id="gapPriority" class="chips muted"></div>
+          </div>
+        </div>
+        <div class="lists">
+          <div>
+            <h3>Matched Skills</h3>
+            <div id="matchedSkills" class="chips"></div>
+          </div>
+          <div>
+            <h3>Missing Keywords</h3>
+            <div id="missingSkills" class="chips muted"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-roadmap" class="page-panel">
+        <div class="page-head">
+          <h2>Career Roadmap</h2>
+          <p class="muted">Follow a month-by-month plan for the role you want.</p>
+        </div>
+        <div id="roadmapCards" class="roadmap-grid"></div>
+      </section>
+    </section>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@motionone/dom/dist/motion.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

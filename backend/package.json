@@ -1,0 +1,17 @@
+{
+  "name": "resume-ai-backend",
+  "version": "1.0.0",
+  "description": "Node.js backend for Gemini-powered resume analysis and job recommendations.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "resume-analyzer",
+    "gemini-api",
+    "job-finder",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT"
+}
